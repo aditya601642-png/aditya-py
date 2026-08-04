@@ -24,8 +24,8 @@ VER_PHP_URL = "https://version.ggwhitehawk.com/live/ver.php"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PORT = int(os.environ.get('PORT', 10000))
 
-ADMIN_USER = "DADDYPRASHANT"
-ADMIN_PASS = "HIMANSHU186"
+ADMIN_USER = "UXDEMONOFC"
+ADMIN_PASS = "Aditya@7457$aditya*7457"
 
 # Data file paths
 DATA_FILE = os.path.join(BASE_DIR, "crx_data.json")
@@ -488,7 +488,7 @@ LOGIN_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRITICAL XR · Admin</title>
+    <title>REACH PANEL · Admin</title>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
         body{background:#08080e;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:'Segoe UI',system-ui,sans-serif;background-image:radial-gradient(ellipse at 50% 0%,rgba(108,92,231,0.06),transparent 60%)}
@@ -529,7 +529,7 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRITICAL XR · Admin</title>
+    <title>REACH PANEL · Admin</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -635,7 +635,7 @@ LANDING_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRITICAL XR · Unlock</title>
+    <title>REACH PANEL · Unlock</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -698,7 +698,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRITICAL XR · Proxy</title>
+    <title>REACH PANEL · Proxy</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -809,7 +809,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             <a href="https://t.me/+_DREezIvLeBmZDZl" target="_blank"><i class="fab fa-telegram"></i></a>
         </div>
         
-        <div class="footer"><div class="footer-text"><span>CRITICAL XR</span> · PROXY</div></div>
+        <div class="footer"><div class="footer-text"><span>REACH PANEL</span> · PROXY</div></div>
     </div>
     <div class="toast" id="toast"></div>
     <script>
@@ -882,7 +882,7 @@ if __name__ == "__main__":
     port = int(os.environ.get('PORT', 10000))
     
     print("\n" + "="*50)
-    print("  CRITICAL XR PROXY INTERCEPTOR")
+    print("  REACH PANEL PROXY INTERCEPTOR")
     print("="*50)
     print(f"  Server Port: {port}")
     print(f"  Public URL: https://criitical-xr-proxy-server-website.onrender.com")
