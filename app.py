@@ -39,9 +39,9 @@ DEFAULT_CONFIG = {
     "HS_NECK": False,
     "HS_CHEST": False,
     "BYPASSV1": True,
-    "BACKJUMPV1": True,
-    "HIGH_SENSI": True,
-    "ZIG_ZAG_MOVE": True
+    "BACKJUMPV1": False,
+    "HIGH_SENSI": False,
+    "ZIG_ZAG_MOVE": False
 }
 
 ANTI_BAN_OVERRIDES = {
