@@ -510,7 +510,7 @@ LOGIN_PAGE = """<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="brand">
-            <h1>CRITICAL <span>XR</span></h1>
+            <h1>REACH <span>REACH</span></h1>
             <p>ADMINISTRATOR ACCESS</p>
         </div>
         <form method="POST">
@@ -566,7 +566,7 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
 <body>
     <div class="container">
         <div class="header">
-            <h1>CRITICAL <span>XR</span> · Administration</h1>
+            <h1>REACH <span>REACH</span> · Administration</h1>
             <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> Exit</a>
         </div>
         <div class="grid">
@@ -664,17 +664,17 @@ LANDING_PAGE = """<!DOCTYPE html>
     <div class="container">
         <div class="brand">
             <div class="icon"><i class="fas fa-unlock-alt"></i></div>
-            <h1>CRITICAL <span>XR</span></h1>
-            <p>@DADDYPRASHANT</p>
+            <h1>REACH <span>REACH</span></h1>
+            <p>@CEO_UXDEMONOFC</p>
         </div>
         <div class="step-status">
             <span id="ytStatus"><i class="fab fa-youtube"></i> YouTube</span>
             <span id="tgStatus"><i class="fab fa-telegram"></i> Telegram</span>
         </div>
-        <a href="https://youtube.com/@xrcomeback?si=06495KJwHiHl40Yf" target="_blank" class="social-btn youtube" onclick="markYouTube()">
+        <a href="https://youtube.com/@demon_xx_999?si=eDdR7AlwqLIL9YD9" target="_blank" class="social-btn youtube" onclick="markYouTube()">
             <i class="fab fa-youtube"></i> Subscribe to Continue
         </a>
-        <a href="https://t.me/+_DREezIvLeBmZDZl" target="_blank" class="social-btn telegram" onclick="markTelegram()">
+        <a href="https://t.me/UX_DEMON_OFC" target="_blank" class="social-btn telegram" onclick="markTelegram()">
             <i class="fab fa-telegram-plane"></i> Join TG to Continue
         </a>
         <div class="note">Subscribe and Join TG to Continue.</div>
@@ -748,7 +748,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         <div class="header">
             <div class="brand">
                 <div class="brand-icon"><i class="fas fa-satellite-dish"></i></div>
-                <div class="brand-text">CRITICAL <span>XR</span></div>
+                <div class="brand-text">REACH <span>REACH</span></div>
             </div>
             <div class="status-badge">
                 <div class="status-dot"></div>
@@ -801,12 +801,12 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         <div class="note-box">
             <i class="fas fa-info-circle" style="color:#6c5ce7;margin-right:6px;"></i>
             If game is not opening copy and paste/open the above link on chrome<br>
-            <a href="https://criitical-xr-proxy-server-website.onrender.com" target="_blank">https://criitical-xr-proxy-server-website.onrender.com</a>
+            <a href="https://reachpanel-uxdemonofc.onrender.com" target="_blank">https://reachpanel-uxdemonofc.onrender.com</a>
         </div>
 
         <div class="social-footer">
-            <a href="https://youtube.com/@xrcomeback?si=06495KJwHiHl40Yf" target="_blank"><i class="fab fa-youtube"></i></a>
-            <a href="https://t.me/+_DREezIvLeBmZDZl" target="_blank"><i class="fab fa-telegram"></i></a>
+            <a href="https://youtube.com/@demon_xx_999?si=eDdR7AlwqLIL9YD9" target="_blank"><i class="fab fa-youtube"></i></a>
+            <a href="https://t.me/" target="_blank"><i class="fab fa-telegram"></i></a>
         </div>
         
         <div class="footer"><div class="footer-text"><span>REACH PANEL</span> · PROXY</div></div>
@@ -885,7 +885,7 @@ if __name__ == "__main__":
     print("  REACH PANEL PROXY INTERCEPTOR")
     print("="*50)
     print(f"  Server Port: {port}")
-    print(f"  Public URL: https://criitical-xr-proxy-server-website.onrender.com")
+    print(f"  Public URL: https://reachpanel-uxdemonofc.onrender.com")
     print(f"  Admin     : /Po7eO")
     print(f"  Status    : Running")
     print("="*50 + "\n")
