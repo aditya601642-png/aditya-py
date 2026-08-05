@@ -564,7 +564,7 @@ USER_LOGIN_PAGE = """<!DOCTYPE html>
     <div class="container">
         <div class="brand">
             <div class="icon"><i class="fas fa-key"></i></div>
-            <h1>REACH <span>REACH</span></h1>
+            <h1>REACH <span>PANEL</span></h1>
             <p>@CEO_UXDEMONOFC</p>
         </div>
         
@@ -626,7 +626,7 @@ LOGIN_PAGE = """<!DOCTYPE html>
     """ + PARTICLES_SCRIPT + """
     <div class="container">
         <div class="brand">
-            <h1>REACH <span>REACH</span></h1>
+            <h1>REACH <span>PANEL</span></h1>
             <p>ADMINISTRATOR ACCESS</p>
         </div>
         <form method="POST">
@@ -685,7 +685,7 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
     """ + PARTICLES_SCRIPT + """
     <div class="container">
         <div class="header">
-            <h1>REACH <span>REACH</span> · Administration</h1>
+            <h1>REACH <span>PANEL</span> · Administration</h1>
             <a href="/admin/logout"><i class="fas fa-sign-out-alt"></i> Exit</a>
         </div>
         <div class="grid">
@@ -804,7 +804,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         <div class="header">
             <div class="brand">
                 <div class="brand-icon"><i class="fas fa-satellite-dish"></i></div>
-                <div class="brand-text">REACH <span>REACH</span></div>
+                <div class="brand-text">REACH <span>PANEL</span></div>
             </div>
             <div style="display:flex;align-items:center;gap:10px;">
                 <div class="status-badge">
