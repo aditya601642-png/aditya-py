@@ -27,14 +27,13 @@ PORT = int(os.environ.get('PORT', 10000))
 ADMIN_USER = "UXDEMONOFC"
 ADMIN_PASS = "Aditya@7457$aditya*7457"
 
-# Data file paths
 DATA_FILE = os.path.join(BASE_DIR, "crx_data.json")
 
 user_configs = {}
 registered_ips = {}
 generated_keys = {}
 key_expiry = {}
-key_sessions = {}  # Track active sessions per key
+key_sessions = {}  # track active session per key
 
 DEFAULT_CONFIG = {
     "HS_NECK": False,
@@ -136,7 +135,6 @@ def ping():
 threading.Thread(target=keep_alive, daemon=True).start()
 
 # ==================== DATA PERSISTENCE ====================
-
 def save_data():
     data = {
         'user_configs': user_configs,
@@ -185,7 +183,6 @@ def load_data():
         save_data()
 
 # ========================================================
-
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -283,56 +280,54 @@ def modify_ver_response(response_text, client_ip):
     except:
         return response_text
 
-# ==================== USER AUTH ROUTES ====================
-
+# ==================== USER AUTH ====================
 @app.route('/user-login', methods=['GET', 'POST'])
 def user_login_page():
     if request.method == 'POST':
         key = request.form.get('key', '').strip()
-        
         if key not in generated_keys:
             return render_template_string(USER_LOGIN_PAGE, error="❌ Invalid Key! Contact @UX_DEMON_OFC")
         
         key_data = generated_keys[key]
         expiry_date = datetime.now() + timedelta(days=key_data['days'])
         
-        # Check if key is expired
+        # Check if already used on another device
         if key in key_sessions:
             session_data = key_sessions[key]
-            if datetime.fromisoformat(session_data.get('expiry', '2000-01-01')) < datetime.now():
-                return render_template_string(USER_LOGIN_PAGE, error="❌ Key Expired! Contact admin for renewal")
+            existing_ip = session_data.get('ip')
+            if existing_ip:
+                # Check expiry
+                try:
+                    expiry = datetime.fromisoformat(session_data.get('expiry', '2000-01-01'))
+                    if expiry < datetime.now():
+                        # Key expired, allow re-use
+                        pass
+                    else:
+                        # Still valid, check device
+                        if existing_ip != get_client_ip():
+                            return render_template_string(USER_LOGIN_PAGE, error="❌ Key already in use on another device!")
+                except:
+                    pass  # corrupted expiry, allow re-login
         
-        # Check device limit (1 device per key)
-        if key in key_sessions:
-            existing_ip = key_sessions[key].get('ip')
-            current_ip = get_client_ip()
-            if existing_ip and existing_ip != current_ip:
-                return render_template_string(USER_LOGIN_PAGE, error="❌ Key already in use on another device!")
-        
-        # Register session
+        # Register or update session
         client_ip = get_client_ip()
         key_sessions[key] = {
             'ip': client_ip,
             'login_time': datetime.now().isoformat(),
             'expiry': expiry_date.isoformat()
         }
-        
         if client_ip not in registered_ips:
             registered_ips[client_ip] = key
-            if 'used_ips' not in key_data:
-                key_data['used_ips'] = []
+            key_data['used_ips'] = key_data.get('used_ips', [])
             if client_ip not in key_data['used_ips']:
                 key_data['used_ips'].append(client_ip)
-        
         key_expiry[client_ip] = expiry_date
         save_data()
         
         session['user_authenticated'] = True
         session['user_key'] = key
         session['user_ip'] = client_ip
-        
         return redirect(url_for('dashboard'))
-    
     return render_template_string(USER_LOGIN_PAGE, error=None)
 
 @app.route('/logout-user')
@@ -344,8 +339,7 @@ def logout_user():
     session.clear()
     return redirect(url_for('user_login_page'))
 
-# ==================== ROUTES ====================
-
+# ==================== ADMIN ROUTES ====================
 @app.route('/Po7eO', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -360,11 +354,33 @@ def login():
 @app.route('/admin/dashboard')
 @login_required
 def admin_dashboard():
+    now = datetime.now()
+    key_details = []
+    for key, data in generated_keys.items():
+        sess = key_sessions.get(key, {})
+        ip = sess.get('ip', '-')
+        expiry_str = sess.get('expiry', '')
+        if ip and expiry_str:
+            try:
+                expiry = datetime.fromisoformat(expiry_str)
+                status = 'active' if expiry > now else 'expired'
+            except:
+                status = 'expired'
+        else:
+            status = 'unused'
+        key_details.append({
+            'key': key,
+            'days': data.get('days', 7),
+            'ip': ip if ip else '-',
+            'status': status,
+            'created': data.get('created', '')[:10],
+            'expires': expiry_str[:10] if expiry_str else '-'
+        })
     return render_template_string(ADMIN_DASHBOARD, 
-                                 keys=generated_keys, 
+                                 keys=generated_keys,
                                  ips=registered_ips,
-                                 key_expiry=key_expiry,
-                                 key_sessions=key_sessions)
+                                 key_sessions=key_sessions,
+                                 key_details=key_details)
 
 @app.route('/admin/generate', methods=['POST'])
 @login_required
@@ -375,7 +391,6 @@ def generate_new_key():
     new_key = generate_key(key_prefix)
     generated_keys[new_key] = {
         'prefix': key_prefix,
-        'limit': 1,  # Always 1 device
         'days': days_valid,
         'created': datetime.now().isoformat(),
         'used_ips': []
@@ -408,7 +423,6 @@ def logout():
     return redirect(url_for('login'))
 
 # ============ PROXY ROUTES ============
-
 @app.route('/ver.php', methods=['GET'])
 @app.route('/live/ver.php', methods=['GET'])
 def handle_ver_php():
@@ -461,8 +475,7 @@ def handle_cdn(path=""):
     except Exception as e:
         return Response(f"Error: {e}", status=502)
 
-# ============ API ROUTES ============
-
+# ============ API ============
 @app.route('/api/status', methods=['GET'])
 def api_status():
     client_ip = get_client_ip()
@@ -480,7 +493,6 @@ def api_toggle():
     data = request.json
     feature = data.get('feature')
     value = data.get('value')
-    
     feature_map = {
         'hs_neck': 'HS_NECK',
         'hs_chest': 'HS_CHEST',
@@ -488,21 +500,13 @@ def api_toggle():
         'high_sensi': 'HIGH_SENSI',
         'zig_zag_move': 'ZIG_ZAG_MOVE'
     }
-    
     config_key = feature_map.get(feature)
     if not config_key:
         return jsonify({"error": "Invalid feature"}), 400
-    
     config = get_user_config(client_ip)
     config[config_key] = value
     save_data()
-    
-    return jsonify({
-        "success": True,
-        "ip": client_ip,
-        "feature": feature,
-        "value": value
-    })
+    return jsonify({"success": True, "ip": client_ip, "feature": feature, "value": value})
 
 @app.route('/api/ip/check', methods=['GET'])
 def api_ip_check():
@@ -524,7 +528,6 @@ def dashboard():
     return render_template_string(DASHBOARD_PAGE)
 
 # ==================== HTML TEMPLATES ====================
-
 USER_LOGIN_PAGE = """<!DOCTYPE html>
 <html>
 <head>
@@ -557,7 +560,6 @@ USER_LOGIN_PAGE = """<!DOCTYPE html>
         .field label{display:block;color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
         .field input{width:100%;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:12px;color:#fff;font-size:15px;transition:0.3s;outline:none;font-family:monospace;letter-spacing:2px;text-align:center}
         .field input:focus{border-color:rgba(108,92,231,0.3);background:rgba(108,92,231,0.03)}
-        .field input::placeholder{color:rgba(255,255,255,0.05);letter-spacing:2px}
         .btn{width:100%;padding:16px;background:linear-gradient(135deg,#6c5ce7,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;letter-spacing:2px;cursor:pointer;transition:0.3s}
         .btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 36px rgba(108,92,231,0.25)}
         .btn:disabled{opacity:0.3;cursor:not-allowed}
@@ -605,14 +607,11 @@ USER_LOGIN_PAGE = """<!DOCTYPE html>
     <script>
         let ytClicked = false;
         let tgClicked = false;
-        
         function markClicked(el) {
             if (el.id === 'ytLink') ytClicked = true;
             if (el.id === 'tgLink') tgClicked = true;
             el.classList.add('clicked');
         }
-        
-        // Check if both links clicked
         document.querySelector('form').addEventListener('submit', function(e) {
             if (!ytClicked || !tgClicked) {
                 e.preventDefault();
@@ -699,9 +698,9 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
         .badge{padding:2px 10px;border-radius:6px;font-size:10px;font-weight:600;background:rgba(108,92,231,0.08);color:#6c5ce7;font-family:monospace}
         .badge.active{background:rgba(52,211,153,0.08);color:#34d399}
         .badge.expired{background:rgba(239,68,68,0.08);color:#ef4444}
-        .badge.warning{background:rgba(251,191,36,0.08);color:#fbbf24}
-        .full{grid-column:1/-1}
+        .badge.unused{background:rgba(251,191,36,0.08);color:#fbbf24}
         .device-badge{font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(108,92,231,0.15);color:#a78bfa}
+        .full{grid-column:1/-1}
         @media(max-width:768px){.grid{grid-template-columns:1fr}.header{flex-direction:column;gap:12px}}
     </style>
 </head>
@@ -718,9 +717,7 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
                 <div class="field"><label>Validity (Days)</label><input type="number" id="keyDays" value="7" min="1"></div>
                 <button class="btn" onclick="generateKey()"><i class="fas fa-plus"></i> Generate Key</button>
                 <div id="generatedKey" style="margin-top:14px;font-family:monospace;color:#6c5ce7;font-size:16px;font-weight:600;"></div>
-                <div style="margin-top:8px;font-size:9px;color:rgba(255,255,255,0.2);">
-                    <i class="fas fa-info-circle"></i> Each key works on 1 device only
-                </div>
+                <div style="margin-top:8px;font-size:9px;color:rgba(255,255,255,0.2);"><i class="fas fa-info-circle"></i> Each key works on 1 device only</div>
             </div>
             <div class="card">
                 <h2><i class="fas fa-info-circle"></i> Statistics</h2>
@@ -746,26 +743,15 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
                 <table>
                     <thead><tr><th>Key</th><th>Days</th><th>IP</th><th>Status</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead>
                     <tbody>
-                        {% for key, data in keys.items() %}
-                        {% set session_data = key_sessions.get(key, {}) %}
+                        {% for d in key_details %}
                         <tr>
-                            <td><span class="badge">{{ key }}</span></td>
-                            <td>{{ data.days }}</td>
-                            <td>{% if session_data.get('ip') %}<span class="device-badge">{{ session_data.ip }}</span>{% else %}<span style="color:rgba(255,255,255,0.1)">-</span>{% endif %}</td>
-                            <td>
-                                {% if session_data.get('ip') %}
-                                    {% if session_data.get('expiry') and datetime.fromisoformat(session_data.expiry) > datetime.now() %}
-                                        <span class="badge active">Active</span>
-                                    {% else %}
-                                        <span class="badge expired">Expired</span>
-                                    {% endif %}
-                                {% else %}
-                                    <span class="badge warning">Unused</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ data.created[:10] }}</td>
-                            <td>{% if session_data.get('expiry') %}{{ session_data.expiry[:10] }}{% else %}-{% endif %}</td>
-                            <td><button class="btn btn-danger btn-sm" onclick="revokeKey('{{ key }}')">Revoke</button></td>
+                            <td><span class="badge">{{ d.key }}</span></td>
+                            <td>{{ d.days }}</td>
+                            <td>{% if d.ip != '-' %}<span class="device-badge">{{ d.ip }}</span>{% else %}<span style="color:rgba(255,255,255,0.1)">-</span>{% endif %}</td>
+                            <td><span class="badge {{ d.status }}">{{ d.status|capitalize }}</span></td>
+                            <td>{{ d.created }}</td>
+                            <td>{{ d.expires }}</td>
+                            <td><button class="btn btn-danger btn-sm" onclick="revokeKey('{{ d.key }}')">Revoke</button></td>
                         </tr>
                         {% else %}
                         <tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.05);">No keys generated</td></tr>
@@ -914,12 +900,9 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             clearTimeout(t._h);
             t._h = setTimeout(() => t.className = 'toast', 1800);
         }
-        
         fetch('/api/ip/check').then(r=>r.json()).then(d=>{
             document.getElementById('ipDisplay').textContent = d.ip || 'Unknown';
         });
-        
-        // Load current config
         fetch('/api/status').then(r=>r.json()).then(d=>{
             const c = d.config;
             document.getElementById('sw_hs_neck').className = 'sw' + (c.HS_NECK ? ' on' : '');
@@ -928,14 +911,11 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             document.getElementById('sw_high_sensi').className = 'sw' + (c.HIGH_SENSI ? ' on' : '');
             document.getElementById('sw_zig_zag_move').className = 'sw' + (c.ZIG_ZAG_MOVE ? ' on' : '');
         });
-        
         function toggle(feature) {
             const el = document.getElementById('sw_' + feature);
             const on = el.classList.contains('on');
             const val = !on;
-            
             el.className = 'sw' + (val ? ' on' : '');
-            
             fetch('/api/toggle', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -960,7 +940,6 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 if __name__ == "__main__":
     load_data()
     port = int(os.environ.get('PORT', 10000))
-    
     print("\n" + "="*50)
     print("  REACH PANEL PROXY INTERCEPTOR")
     print("="*50)
@@ -970,5 +949,4 @@ if __name__ == "__main__":
     print(f"  User Login: /user-login")
     print(f"  Status    : Running")
     print("="*50 + "\n")
-    
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
