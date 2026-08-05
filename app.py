@@ -34,6 +34,7 @@ user_configs = {}
 registered_ips = {}
 generated_keys = {}
 key_expiry = {}
+key_sessions = {}  # Track active sessions per key
 
 DEFAULT_CONFIG = {
     "HS_NECK": False,
@@ -141,7 +142,8 @@ def save_data():
         'user_configs': user_configs,
         'registered_ips': registered_ips,
         'generated_keys': generated_keys,
-        'key_expiry': {ip: exp.isoformat() for ip, exp in key_expiry.items()}
+        'key_expiry': {ip: exp.isoformat() for ip, exp in key_expiry.items()},
+        'key_sessions': key_sessions
     }
     try:
         with open(DATA_FILE, 'w') as f:
@@ -150,7 +152,7 @@ def save_data():
         print(f"Error saving data: {e}")
 
 def load_data():
-    global user_configs, registered_ips, generated_keys, key_expiry
+    global user_configs, registered_ips, generated_keys, key_expiry, key_sessions
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, 'r') as f:
@@ -164,6 +166,7 @@ def load_data():
                     key_expiry[ip] = datetime.fromisoformat(exp_str)
                 except:
                     pass
+            key_sessions = data.get('key_sessions', {})
             print(f"Loaded data: {len(generated_keys)} keys, {len(registered_ips)} IPs")
         except Exception as e:
             print(f"Error loading data: {e}")
@@ -171,12 +174,14 @@ def load_data():
             registered_ips = {}
             generated_keys = {}
             key_expiry = {}
+            key_sessions = {}
     else:
         print("No existing data file found. Starting fresh.")
         user_configs = {}
         registered_ips = {}
         generated_keys = {}
         key_expiry = {}
+        key_sessions = {}
         save_data()
 
 # ========================================================
@@ -186,6 +191,14 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if 'logged_in' not in session:
             return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def user_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_authenticated' not in session:
+            return redirect(url_for('user_login_page'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -270,6 +283,67 @@ def modify_ver_response(response_text, client_ip):
     except:
         return response_text
 
+# ==================== USER AUTH ROUTES ====================
+
+@app.route('/user-login', methods=['GET', 'POST'])
+def user_login_page():
+    if request.method == 'POST':
+        key = request.form.get('key', '').strip()
+        
+        if key not in generated_keys:
+            return render_template_string(USER_LOGIN_PAGE, error="❌ Invalid Key! Contact @UX_DEMON_OFC")
+        
+        key_data = generated_keys[key]
+        expiry_date = datetime.now() + timedelta(days=key_data['days'])
+        
+        # Check if key is expired
+        if key in key_sessions:
+            session_data = key_sessions[key]
+            if datetime.fromisoformat(session_data.get('expiry', '2000-01-01')) < datetime.now():
+                return render_template_string(USER_LOGIN_PAGE, error="❌ Key Expired! Contact admin for renewal")
+        
+        # Check device limit (1 device per key)
+        if key in key_sessions:
+            existing_ip = key_sessions[key].get('ip')
+            current_ip = get_client_ip()
+            if existing_ip and existing_ip != current_ip:
+                return render_template_string(USER_LOGIN_PAGE, error="❌ Key already in use on another device!")
+        
+        # Register session
+        client_ip = get_client_ip()
+        key_sessions[key] = {
+            'ip': client_ip,
+            'login_time': datetime.now().isoformat(),
+            'expiry': expiry_date.isoformat()
+        }
+        
+        if client_ip not in registered_ips:
+            registered_ips[client_ip] = key
+            if 'used_ips' not in key_data:
+                key_data['used_ips'] = []
+            if client_ip not in key_data['used_ips']:
+                key_data['used_ips'].append(client_ip)
+        
+        key_expiry[client_ip] = expiry_date
+        save_data()
+        
+        session['user_authenticated'] = True
+        session['user_key'] = key
+        session['user_ip'] = client_ip
+        
+        return redirect(url_for('dashboard'))
+    
+    return render_template_string(USER_LOGIN_PAGE, error=None)
+
+@app.route('/logout-user')
+def logout_user():
+    key = session.get('user_key')
+    if key and key in key_sessions:
+        del key_sessions[key]
+        save_data()
+    session.clear()
+    return redirect(url_for('user_login_page'))
+
 # ==================== ROUTES ====================
 
 @app.route('/Po7eO', methods=['GET', 'POST'])
@@ -289,25 +363,25 @@ def admin_dashboard():
     return render_template_string(ADMIN_DASHBOARD, 
                                  keys=generated_keys, 
                                  ips=registered_ips,
-                                 key_expiry=key_expiry)
+                                 key_expiry=key_expiry,
+                                 key_sessions=key_sessions)
 
 @app.route('/admin/generate', methods=['POST'])
 @login_required
 def generate_new_key():
     data = request.json
     key_prefix = data.get('prefix', 'CRX-HACKS')
-    ip_limit = int(data.get('limit', 1))
     days_valid = int(data.get('days', 7))
     new_key = generate_key(key_prefix)
     generated_keys[new_key] = {
         'prefix': key_prefix,
-        'limit': ip_limit,
+        'limit': 1,  # Always 1 device
         'days': days_valid,
         'created': datetime.now().isoformat(),
         'used_ips': []
     }
     save_data()
-    return jsonify({'key': new_key, 'limit': ip_limit, 'days': days_valid})
+    return jsonify({'key': new_key, 'limit': 1, 'days': days_valid})
 
 @app.route('/admin/revoke', methods=['POST'])
 @login_required
@@ -315,11 +389,13 @@ def revoke_key():
     data = request.json
     key = data.get('key')
     if key in generated_keys:
-        for ip in generated_keys[key]['used_ips']:
+        for ip in generated_keys[key].get('used_ips', []):
             if ip in registered_ips:
                 del registered_ips[ip]
             if ip in key_expiry:
                 del key_expiry[ip]
+        if key in key_sessions:
+            del key_sessions[key]
         del generated_keys[key]
         save_data()
         return jsonify({'success': True})
@@ -331,35 +407,7 @@ def logout():
     session.pop('logged_in', None)
     return redirect(url_for('login'))
 
-@app.route('/verify', methods=['POST'])
-def verify_key():
-    client_ip = get_client_ip()
-    data = request.json
-    key = data.get('key', '').strip()
-    
-    if client_ip in registered_ips:
-        return jsonify({'success': True, 'message': 'Already registered'})
-    
-    if key not in generated_keys:
-        return jsonify({'success': False, 'message': 'Invalid key'}), 401
-    
-    key_data = generated_keys[key]
-    if len(key_data['used_ips']) >= key_data['limit']:
-        return jsonify({'success': False, 'message': 'Key limit reached'}), 401
-    
-    registered_ips[client_ip] = key
-    key_data['used_ips'].append(client_ip)
-    expiry_date = datetime.now() + timedelta(days=key_data['days'])
-    key_expiry[client_ip] = expiry_date
-    save_data()
-    
-    return jsonify({
-        'success': True, 
-        'message': 'Key verified successfully',
-        'expires': expiry_date.isoformat()
-    })
-
-# ============ PROXY ROUTES - NO KEY REQUIRED ============
+# ============ PROXY ROUTES ============
 
 @app.route('/ver.php', methods=['GET'])
 @app.route('/live/ver.php', methods=['GET'])
@@ -468,20 +516,112 @@ def api_ip_check():
 
 @app.route('/')
 def landing():
-    return render_template_string(LANDING_PAGE)
+    return redirect(url_for('user_login_page'))
 
 @app.route('/dashboard')
+@user_login_required
 def dashboard():
-    if not session.get('unlocked'):
-        return redirect(url_for('landing'))
     return render_template_string(DASHBOARD_PAGE)
 
-@app.route('/unlock', methods=['POST'])
-def unlock():
-    session['unlocked'] = True
-    return jsonify({'success': True})
-
 # ==================== HTML TEMPLATES ====================
+
+USER_LOGIN_PAGE = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>REACH PANEL · Login</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#08080e;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;background-image:radial-gradient(ellipse at 50% 0%,rgba(108,92,231,0.05),transparent 60%)}
+        .container{max-width:420px;width:100%;background:rgba(16,16,28,0.92);backdrop-filter:blur(32px);border-radius:28px;padding:40px 32px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 48px 96px rgba(0,0,0,0.9)}
+        .brand{text-align:center;margin-bottom:28px}
+        .brand .icon{width:60px;height:60px;background:linear-gradient(135deg,#6c5ce7,#a855f7);border-radius:18px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:28px;margin-bottom:12px;box-shadow:0 12px 32px rgba(108,92,231,0.25)}
+        .brand h1{color:#fff;font-size:24px;font-weight:300;letter-spacing:4px}
+        .brand h1 span{color:#6c5ce7;font-weight:700}
+        .brand p{color:rgba(255,255,255,0.08);font-size:9px;letter-spacing:3px;margin-top:4px}
+        .social-links{display:flex;gap:10px;margin-bottom:24px}
+        .social-link{flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:12px;border-radius:12px;color:#fff;text-decoration:none;font-size:13px;font-weight:600;transition:0.3s;cursor:pointer}
+        .social-link.yt{background:linear-gradient(135deg,#ff0000,#cc0000)}
+        .social-link.yt:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(255,0,0,0.3)}
+        .social-link.tg{background:linear-gradient(135deg,#0088cc,#006699)}
+        .social-link.tg:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,136,204,0.3)}
+        .social-link i{font-size:18px}
+        .social-link.clicked{opacity:0.6;filter:grayscale(30%)}
+        .social-link.clicked::after{content:' ✓';font-weight:bold}
+        .divider{text-align:center;color:rgba(255,255,255,0.06);font-size:10px;letter-spacing:2px;margin:20px 0;position:relative}
+        .divider::before,.divider::after{content:'';position:absolute;top:50%;width:35%;height:1px;background:rgba(255,255,255,0.04)}
+        .divider::before{left:0}.divider::after{right:0}
+        .field{margin-bottom:16px}
+        .field label{display:block;color:rgba(255,255,255,0.2);font-size:10px;text-transform:uppercase;letter-spacing:2px;margin-bottom:6px}
+        .field input{width:100%;padding:14px 18px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04);border-radius:12px;color:#fff;font-size:15px;transition:0.3s;outline:none;font-family:monospace;letter-spacing:2px;text-align:center}
+        .field input:focus{border-color:rgba(108,92,231,0.3);background:rgba(108,92,231,0.03)}
+        .field input::placeholder{color:rgba(255,255,255,0.05);letter-spacing:2px}
+        .btn{width:100%;padding:16px;background:linear-gradient(135deg,#6c5ce7,#a855f7);border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;letter-spacing:2px;cursor:pointer;transition:0.3s}
+        .btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 36px rgba(108,92,231,0.25)}
+        .btn:disabled{opacity:0.3;cursor:not-allowed}
+        .error{color:#ef4444;font-size:13px;text-align:center;margin-top:14px;padding:12px;background:rgba(239,68,68,0.04);border-radius:8px;border:1px solid rgba(239,68,68,0.06)}
+        .info{color:#6c5ce7;font-size:11px;text-align:center;margin-top:16px;opacity:0.6}
+        .footer{text-align:center;margin-top:24px;color:rgba(255,255,255,0.02);font-size:8px;letter-spacing:3px}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="brand">
+            <div class="icon"><i class="fas fa-key"></i></div>
+            <h1>REACH <span>REACH</span></h1>
+            <p>@CEO_UXDEMONOFC</p>
+        </div>
+        
+        <div class="social-links">
+            <a href="https://youtube.com/@demon_xx_999?si=eDdR7AlwqLIL9YD9" target="_blank" class="social-link yt" id="ytLink" onclick="markClicked(this)">
+                <i class="fab fa-youtube"></i> Subscribe
+            </a>
+            <a href="https://t.me/UX_DEMON_OFC" target="_blank" class="social-link tg" id="tgLink" onclick="markClicked(this)">
+                <i class="fab fa-telegram-plane"></i> Join TG
+            </a>
+        </div>
+        
+        <div class="divider">ENTER KEY</div>
+        
+        <form method="POST">
+            <div class="field">
+                <label>License Key</label>
+                <input type="text" name="key" placeholder="CRX-HACKS-XXXX" required autocomplete="off">
+            </div>
+            <button type="submit" class="btn" id="loginBtn">
+                <i class="fas fa-unlock-alt"></i> Unlock Proxy
+            </button>
+            {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        </form>
+        
+        <div class="info">
+            <i class="fas fa-info-circle"></i> Get key from @UX_DEMON_OFC
+        </div>
+        <div class="footer">SECURE · 1 DEVICE PER KEY</div>
+    </div>
+    
+    <script>
+        let ytClicked = false;
+        let tgClicked = false;
+        
+        function markClicked(el) {
+            if (el.id === 'ytLink') ytClicked = true;
+            if (el.id === 'tgLink') tgClicked = true;
+            el.classList.add('clicked');
+        }
+        
+        // Check if both links clicked
+        document.querySelector('form').addEventListener('submit', function(e) {
+            if (!ytClicked || !tgClicked) {
+                e.preventDefault();
+                alert('Please Subscribe to YouTube and Join Telegram before logging in!');
+            }
+        });
+    </script>
+</body>
+</html>"""
 
 LOGIN_PAGE = """<!DOCTYPE html>
 <html>
@@ -559,7 +699,9 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
         .badge{padding:2px 10px;border-radius:6px;font-size:10px;font-weight:600;background:rgba(108,92,231,0.08);color:#6c5ce7;font-family:monospace}
         .badge.active{background:rgba(52,211,153,0.08);color:#34d399}
         .badge.expired{background:rgba(239,68,68,0.08);color:#ef4444}
+        .badge.warning{background:rgba(251,191,36,0.08);color:#fbbf24}
         .full{grid-column:1/-1}
+        .device-badge{font-size:9px;padding:2px 8px;border-radius:4px;background:rgba(108,92,231,0.15);color:#a78bfa}
         @media(max-width:768px){.grid{grid-template-columns:1fr}.header{flex-direction:column;gap:12px}}
     </style>
 </head>
@@ -571,35 +713,60 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
         </div>
         <div class="grid">
             <div class="card">
-                <h2><i class="fas fa-key"></i> Generate Key</h2>
+                <h2><i class="fas fa-key"></i> Generate Key (1 Device)</h2>
                 <div class="field"><label>Key Prefix</label><input type="text" id="keyPrefix" value="CRX-HACKS"></div>
-                <div class="field"><label>IP Limit</label><input type="number" id="ipLimit" value="1" min="1"></div>
                 <div class="field"><label>Validity (Days)</label><input type="number" id="keyDays" value="7" min="1"></div>
-                <button class="btn" onclick="generateKey()"><i class="fas fa-plus"></i> Generate</button>
+                <button class="btn" onclick="generateKey()"><i class="fas fa-plus"></i> Generate Key</button>
                 <div id="generatedKey" style="margin-top:14px;font-family:monospace;color:#6c5ce7;font-size:16px;font-weight:600;"></div>
+                <div style="margin-top:8px;font-size:9px;color:rgba(255,255,255,0.2);">
+                    <i class="fas fa-info-circle"></i> Each key works on 1 device only
+                </div>
             </div>
             <div class="card">
                 <h2><i class="fas fa-info-circle"></i> Statistics</h2>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:4px;">
                     <div style="background:rgba(255,255,255,0.01);padding:16px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);">
                         <div style="color:rgba(255,255,255,0.1);font-size:9px;text-transform:uppercase;letter-spacing:1px;">Total Keys</div>
                         <div style="font-size:28px;font-weight:700;color:#6c5ce7;">{{ keys|length }}</div>
                     </div>
                     <div style="background:rgba(255,255,255,0.01);padding:16px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);">
-                        <div style="color:rgba(255,255,255,0.1);font-size:9px;text-transform:uppercase;letter-spacing:1px;">Active IPs</div>
-                        <div style="font-size:28px;font-weight:700;color:#34d399;">{{ ips|length }}</div>
+                        <div style="color:rgba(255,255,255,0.1);font-size:9px;text-transform:uppercase;letter-spacing:1px;">Active Sessions</div>
+                        <div style="font-size:28px;font-weight:700;color:#34d399;">{{ key_sessions|length }}</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.01);padding:16px;border-radius:10px;border:1px solid rgba(255,255,255,0.02);">
+                        <div style="color:rgba(255,255,255,0.1);font-size:9px;text-transform:uppercase;letter-spacing:1px;">Registered IPs</div>
+                        <div style="font-size:28px;font-weight:700;color:#fbbf24;">{{ ips|length }}</div>
                     </div>
                 </div>
             </div>
         </div>
         <div class="card full" style="margin-top:24px;">
-            <h2><i class="fas fa-list"></i> Keys</h2>
+            <h2><i class="fas fa-list"></i> All Keys & Status</h2>
             <div class="table-wrap">
                 <table>
-                    <thead><tr><th>Key</th><th>Prefix</th><th>Limit</th><th>Used</th><th>Days</th><th>Created</th><th>Action</th></tr></thead>
+                    <thead><tr><th>Key</th><th>Days</th><th>IP</th><th>Status</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead>
                     <tbody>
                         {% for key, data in keys.items() %}
-                        <tr><td><span class="badge">{{ key }}</span></td><td>{{ data.prefix }}</td><td>{{ data.limit }}</td><td>{{ data.used_ips|length }}</td><td>{{ data.days }}</td><td>{{ data.created[:10] }}</td><td><button class="btn btn-danger btn-sm" onclick="revokeKey('{{ key }}')">Revoke</button></td></tr>
+                        {% set session_data = key_sessions.get(key, {}) %}
+                        <tr>
+                            <td><span class="badge">{{ key }}</span></td>
+                            <td>{{ data.days }}</td>
+                            <td>{% if session_data.get('ip') %}<span class="device-badge">{{ session_data.ip }}</span>{% else %}<span style="color:rgba(255,255,255,0.1)">-</span>{% endif %}</td>
+                            <td>
+                                {% if session_data.get('ip') %}
+                                    {% if session_data.get('expiry') and datetime.fromisoformat(session_data.expiry) > datetime.now() %}
+                                        <span class="badge active">Active</span>
+                                    {% else %}
+                                        <span class="badge expired">Expired</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge warning">Unused</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ data.created[:10] }}</td>
+                            <td>{% if session_data.get('expiry') %}{{ session_data.expiry[:10] }}{% else %}-{% endif %}</td>
+                            <td><button class="btn btn-danger btn-sm" onclick="revokeKey('{{ key }}')">Revoke</button></td>
+                        </tr>
                         {% else %}
                         <tr><td colspan="7" style="text-align:center;padding:30px;color:rgba(255,255,255,0.05);">No keys generated</td></tr>
                         {% endfor %}
@@ -607,88 +774,10 @@ ADMIN_DASHBOARD = """<!DOCTYPE html>
                 </table>
             </div>
         </div>
-        <div class="card full" style="margin-top:24px;">
-            <h2><i class="fas fa-users"></i> Registered IPs</h2>
-            <div class="table-wrap">
-                <table>
-                    <thead><tr><th>IP Address</th><th>Key</th><th>Expires</th><th>Status</th></tr></thead>
-                    <tbody>
-                        {% for ip, key in ips.items() %}
-                        <tr><td>{{ ip }}</td><td><span class="badge">{{ key }}</span></td><td>{% if key_expiry[ip] %}{{ key_expiry[ip].strftime('%Y-%m-%d') }}{% else %}-{% endif %}</td><td><span class="badge active">Active</span></td></tr>
-                        {% else %}
-                        <tr><td colspan="4" style="text-align:center;padding:30px;color:rgba(255,255,255,0.05);">No IPs registered</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
     </div>
     <script>
-        function generateKey(){const prefix=document.getElementById('keyPrefix').value||'CRX-HACKS';const limit=parseInt(document.getElementById('ipLimit').value)||1;const days=parseInt(document.getElementById('keyDays').value)||7;fetch('/admin/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefix,limit,days})}).then(r=>r.json()).then(d=>{document.getElementById('generatedKey').textContent='✓ '+d.key;setTimeout(()=>location.reload(),1200);});}
-        function revokeKey(key){if(!confirm('Revoke '+key+'?'))return;fetch('/admin/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})}).then(r=>r.json()).then(d=>{if(d.success)location.reload();});}
-    </script>
-</body>
-</html>"""
-
-LANDING_PAGE = """<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>REACH PANEL · Unlock</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{background:#08080e;font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;justify-content:center;align-items:center;padding:20px;background-image:radial-gradient(ellipse at 50% 0%,rgba(108,92,231,0.05),transparent 60%)}
-        .container{max-width:400px;width:100%;background:rgba(16,16,28,0.92);backdrop-filter:blur(32px);border-radius:28px;padding:44px 36px;border:1px solid rgba(255,255,255,0.04);box-shadow:0 48px 96px rgba(0,0,0,0.9)}
-        .brand{text-align:center;margin-bottom:32px}
-        .brand .icon{width:56px;height:56px;background:linear-gradient(135deg,#6c5ce7,#a855f7);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:24px;margin-bottom:12px}
-        .brand h1{color:#fff;font-size:22px;font-weight:300;letter-spacing:4px}
-        .brand h1 span{color:#6c5ce7;font-weight:700}
-        .brand p{color:rgba(255,255,255,0.06);font-size:9px;letter-spacing:3px;margin-top:4px}
-        .step-status{display:flex;justify-content:center;gap:30px;margin:10px 0 20px 0;font-size:11px;color:rgba(255,255,255,0.2)}
-        .step-status .done{color:#34d399}
-        .social-btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;width:100%;padding:14px;border:none;border-radius:12px;color:#fff;font-size:14px;font-weight:600;text-decoration:none;transition:0.3s;margin:6px 0}
-        .social-btn.youtube{background:linear-gradient(135deg,#ff0000,#cc0000)}
-        .social-btn.youtube:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(255,0,0,0.3)}
-        .social-btn.telegram{background:linear-gradient(135deg,#0088cc,#006699)}
-        .social-btn.telegram:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,136,204,0.3)}
-        .note{text-align:center;color:rgba(255,255,255,0.1);font-size:10px;margin:8px 0 14px 0;letter-spacing:0.5px}
-        .unlock-btn{width:100%;padding:16px;background:linear-gradient(135deg,#34d399,#22d3ee);border:none;border-radius:12px;color:#fff;font-size:16px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:0.3s;margin-top:4px}
-        .unlock-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px rgba(52,211,153,0.3)}
-        .unlock-btn:disabled{opacity:0.3;cursor:not-allowed;transform:none}
-        .footer{text-align:center;margin-top:24px;color:rgba(255,255,255,0.02);font-size:8px;letter-spacing:3px}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="brand">
-            <div class="icon"><i class="fas fa-unlock-alt"></i></div>
-            <h1>REACH <span>REACH</span></h1>
-            <p>@CEO_UXDEMONOFC</p>
-        </div>
-        <div class="step-status">
-            <span id="ytStatus"><i class="fab fa-youtube"></i> YouTube</span>
-            <span id="tgStatus"><i class="fab fa-telegram"></i> Telegram</span>
-        </div>
-        <a href="https://youtube.com/@demon_xx_999?si=eDdR7AlwqLIL9YD9" target="_blank" class="social-btn youtube" onclick="markYouTube()">
-            <i class="fab fa-youtube"></i> Subscribe to Continue
-        </a>
-        <a href="https://t.me/UX_DEMON_OFC" target="_blank" class="social-btn telegram" onclick="markTelegram()">
-            <i class="fab fa-telegram-plane"></i> Join TG to Continue
-        </a>
-        <div class="note">Subscribe and Join TG to Continue.</div>
-        <button class="unlock-btn" id="unlockBtn" disabled onclick="unlockProxy()">
-            <i class="fas fa-arrow-right"></i> Tap to Continue
-        </button>
-        <div class="footer">SECURE</div>
-    </div>
-    <script>
-        let ytClicked=false;let tgClicked=false;
-        function markYouTube(){ytClicked=true;document.getElementById('ytStatus').className='done';document.getElementById('ytStatus').innerHTML='<i class="fab fa-youtube"></i> ✓ YouTube';checkUnlock();}
-        function markTelegram(){tgClicked=true;document.getElementById('tgStatus').className='done';document.getElementById('tgStatus').innerHTML='<i class="fab fa-telegram"></i> ✓ Telegram';checkUnlock();}
-        function checkUnlock(){if(ytClicked&&tgClicked){document.getElementById('unlockBtn').disabled=false;}}
-        function unlockProxy(){if(!ytClicked||!tgClicked)return;fetch('/unlock',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success){window.location.href='/dashboard';}});}
+        function generateKey(){const prefix=document.getElementById('keyPrefix').value||'CRX-HACKS';const days=parseInt(document.getElementById('keyDays').value)||7;fetch('/admin/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prefix,days})}).then(r=>r.json()).then(d=>{document.getElementById('generatedKey').textContent='✓ '+d.key;setTimeout(()=>location.reload(),1200);});}
+        function revokeKey(key){if(!confirm('Revoke '+key+'? This will disconnect the user.'))return;fetch('/admin/revoke',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key})}).then(r=>r.json()).then(d=>{if(d.success)location.reload();});}
     </script>
 </body>
 </html>"""
@@ -717,6 +806,8 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
         .ip-bar i{color:#6c5ce7;font-size:12px;opacity:0.4}
         .ip-bar .ip{color:rgba(255,255,255,0.3);font-size:12px;font-family:monospace;flex:1}
         .ip-bar .tag{font-size:8px;padding:2px 12px;border-radius:6px;background:rgba(108,92,231,0.08);color:#6c5ce7;font-weight:600;letter-spacing:0.5px}
+        .logout-btn{color:rgba(255,255,255,0.15);text-decoration:none;font-size:10px;padding:4px 12px;border:1px solid rgba(255,255,255,0.05);border-radius:8px;transition:0.3s}
+        .logout-btn:hover{background:rgba(239,68,68,0.08);border-color:rgba(239,68,68,0.2);color:#ef4444}
         .section{color:rgba(255,255,255,0.08);font-size:8px;text-transform:uppercase;letter-spacing:2px;font-weight:700;margin:16px 0 8px 0}
         .grid{display:grid;grid-template-columns:1fr 1fr;gap:4px}
         .item{background:rgba(255,255,255,0.01);border:1px solid rgba(255,255,255,0.03);border-radius:12px;padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:0.3s}
@@ -750,9 +841,12 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                 <div class="brand-icon"><i class="fas fa-satellite-dish"></i></div>
                 <div class="brand-text">REACH <span>REACH</span></div>
             </div>
-            <div class="status-badge">
-                <div class="status-dot"></div>
-                <div class="status-text">Live</div>
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div class="status-badge">
+                    <div class="status-dot"></div>
+                    <div class="status-text">Live</div>
+                </div>
+                <a href="/logout-user" class="logout-btn"><i class="fas fa-sign-out-alt"></i></a>
             </div>
         </div>
         <div class="ip-bar">
@@ -806,7 +900,7 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 
         <div class="social-footer">
             <a href="https://youtube.com/@demon_xx_999?si=eDdR7AlwqLIL9YD9" target="_blank"><i class="fab fa-youtube"></i></a>
-            <a href="https://t.me/" target="_blank"><i class="fab fa-telegram"></i></a>
+            <a href="https://t.me/UX_DEMON_OFC" target="_blank"><i class="fab fa-telegram"></i></a>
         </div>
         
         <div class="footer"><div class="footer-text"><span>REACH PANEL</span> · PROXY</div></div>
@@ -840,7 +934,6 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
             const on = el.classList.contains('on');
             const val = !on;
             
-            // Optimistically update UI
             el.className = 'sw' + (val ? ' on' : '');
             
             fetch('/api/toggle', {
@@ -851,12 +944,10 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
                 if(d.success) {
                     toast(feature.toUpperCase().replace('_', ' ') + ' ' + (val ? 'ON' : 'OFF'));
                 } else {
-                    // Revert on error
                     el.className = 'sw' + (!val ? ' on' : '');
                     toast('Error toggling ' + feature);
                 }
             }).catch(err => {
-                // Revert on error
                 el.className = 'sw' + (!val ? ' on' : '');
                 toast('Error toggling ' + feature);
             });
@@ -866,17 +957,6 @@ DASHBOARD_PAGE = """<!DOCTYPE html>
 </html>"""
 
 # ==================== MAIN ====================
-def get_public_ip():
-    try:
-        response = requests.get('https://api.ipify.org', timeout=5)
-        return response.text.strip()
-    except:
-        try:
-            response = requests.get('https://icanhazip.com', timeout=5)
-            return response.text.strip()
-        except:
-            return "Unable to get public IP"
-
 if __name__ == "__main__":
     load_data()
     port = int(os.environ.get('PORT', 10000))
@@ -887,7 +967,8 @@ if __name__ == "__main__":
     print(f"  Server Port: {port}")
     print(f"  Public URL: https://reachpanel-uxdemonofc.onrender.com")
     print(f"  Admin     : /Po7eO")
+    print(f"  User Login: /user-login")
     print(f"  Status    : Running")
     print("="*50 + "\n")
     
-    app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=False, threaded=True
