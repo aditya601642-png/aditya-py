@@ -17,7 +17,7 @@ TARGET_BASE_URL = "https://dl.bs.freefiremobile.com/live/ABHotUpdates/"
 VER_PHP_URL = "https://version.ggwhitehawk.com/live/ver.php"
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PORT = int(os.environ.get('PORT', 10000))
+PORT = int(os.environ.get('PORT', 8080))
 
 # ==================== KEEP ALIVE ====================
 def keep_alive():
