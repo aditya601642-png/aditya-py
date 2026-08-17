@@ -15,6 +15,7 @@ app.secret_key = 'super_secret_key_cr'
 
 app_data = {"maintenance": False, "connected_ips": set()}
 
+# SAHI LINK WAPAS LAGA DIYA HAI
 TARGET_BASE_URL = "https://dl.bs.freefiremobile.com/live/ABHotUpdates/"
 VER_PHP_URL = "https://version.ggwhitehawk.com/live/ver.php" 
 ADMIN_PASS = "Aditya@7457$aditya*7457"
