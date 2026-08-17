@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Secure Access</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New', monospace}
+body{background:#020c1b;min-height:100vh;display:flex;justify-content:center;align-items:center;color:#8892b0}
+.box{background:#112240;padding:40px;border-radius:20px;width:90%;max-width:400px;border:1px solid #233554;box-shadow:0 20px 60px -15px rgba(2,12,27,0.7), 0 0 20px rgba(0,212,255,0.1)}
+h2{text-align:center;font-size:24px;color:#ccd6f6;margin-bottom:5px;letter-spacing:2px;text-shadow: 0 0 10px rgba(0,212,255,0.5)}
+h2 span{color:#64ffda;text-shadow: 0 0 10px rgba(100,255,218,0.7)}
+p.sub{text-align:center;font-size:11px;color:#495670;margin-bottom:30px;letter-spacing:1px}
+input{width:100%;padding:15px;background:#020c1b;border:1px solid #233554;border-radius:8px;color:#64ffda;font-size:14px;font-family:inherit;outline:none;transition:0.3s}
+input:focus{border-color:#64ffda;box-shadow:0 0 10px rgba(100,255,218,0.2)}
+button{width:100%;padding:15px;background:transparent;border:1px solid #64ffda;border-radius:8px;color:#64ffda;font-size:14px;font-family:inherit;font-weight:bold;cursor:pointer;letter-spacing:2px;transition:0.3s;margin-top:10px}
+button:hover{background:rgba(100,255,218,0.1);box-shadow:0 0 20px rgba(100,255,218,0.3);transform:translateY(-2px)}
+.msg{color:#ff6b6b;text-align:center;margin-top:15px;font-size:12px;text-shadow:0 0 5px rgba(255,107,107,0.5)}
+</style></head><body>
+<div class="box">
+    <h2>ADMIN <span>ACCESS</span></h2>
+    <p class="sub">PROXY TERMINAL v2.0</p>
+    <form method="POST">
+        <input type="password" name="password" placeholder="ENTER ACCESS KEY" required>
+        <button type="submit">AUTHENTICATE</button>
+    </form>
+    <div class="msg">{{ERROR_MSG}}</div>
+</div>
+</body></html>
