@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Terminal Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New', monospace}
+body{background:#020c1b;color:#8892b0;min-height:100vh;padding:20px}
+.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:30px;padding-bottom:15px;border-bottom:1px solid #233554}
+.brand{font-size:18px;color:#ccd6f6;letter-spacing:2px}.brand span{color:#64ffda}
+.logout{color:#8892b0;text-decoration:none;font-size:11px;border:1px solid #233554;padding:8px 14px;border-radius:6px;transition:0.3s}
+.logout:hover{color:#ff6b6b;border-color:#ff6b6b;box-shadow:0 0 10px rgba(255,107,107,0.2)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
+.card{background:#112240;padding:20px;border-radius:12px;border:1px solid #233554;box-shadow:0 10px 30px -15px rgba(2,12,27,0.7)}
+.card h3{font-size:10px;color:#495670;text-transform:uppercase;letter-spacing:3px;margin-bottom:15px}
+.stat-number{font-size:48px;font-weight:bold;color:#00d4ff;text-shadow:0 0 20px rgba(0,212,255,0.6);line-height:1}
+.stat-label{font-size:12px;color:#64ffda;margin-top:8px;letter-spacing:1px}
+.toggle-row{display:flex;justify-content:space-between;align-items:center;background:#0a192f;padding:15px;border-radius:8px;border:1px solid #233554}
+.info h4{font-size:14px;color:#ccd6f6;margin-bottom:4px}.info p{font-size:10px;color:#495670}
+.sw{width:50px;height:26px;background:#233554;border-radius:15px;cursor:pointer;position:relative;transition:0.3s;border:1px solid #495670}
+.sw .dot{width:20px;height:20px;background:#8892b0;border-radius:50%;position:absolute;top:2px;left:2px;transition:0.3s}
+.sw.on{background:rgba(255,0,64,0.2);border-color:#ff0040;box-shadow:0 0 15px rgba(255,0,64,0.4)}
+.sw.on .dot{left:26px;background:#ff0040;box-shadow:0 0 10px rgba(255,0,64,0.8)}
+.btn-row{display:flex;gap:10px;margin-top:10px}
+.btn-reset{flex:1;padding:12px;background:transparent;border:1px solid #233554;border-radius:8px;color:#8892b0;font-size:11px;font-family:inherit;cursor:pointer;transition:0.3s;text-align:center}
+.btn-reset:hover{border-color:#00d4ff;color:#00d4ff;box-shadow:0 0 15px rgba(0,212,255,0.2)}
+.tg-btn{display:block;width:100%;padding:14px;background:rgba(0,136,204,0.1);border:1px solid #0088cc;border-radius:8px;color:#00d4ff;font-size:12px;font-family:inherit;font-weight:bold;text-align:center;text-decoration:none;transition:0.3s;letter-spacing:1px}
+.tg-btn:hover{background:rgba(0,136,204,0.2);box-shadow:0 0 20px rgba(0,212,255,0.3)}
+</style></head><body>
+<div class="header">
+    <div class="brand">PROXY <span>TERMINAL</span></div>
+    <a href="/admin/logout" class="logout">[ DISCONNECT ]</a>
+</div>
+<div class="grid">
+    <div class="card">
+        <h3>// Active Connections</h3>
+        <div class="stat-number" id="deviceCount">0</div>
+        <div class="stat-label">DEVICES CONNECTED</div>
+        <div class="btn-row">
+            <button class="btn-reset" onclick="resetCounter()">[ RESET COUNTER ]</button>
+        </div>
+    </div>
+    <div class="card">
+        <h3>// System Status</h3>
+        <div class="toggle-row">
+            <div class="info">
+                <h4>Maintenance Mode</h4>
+                <p>Block access / Show TG</p>
+            </div>
+            <div class="sw {% if maintenance %}on{% endif %}" id="maintToggle" onclick="toggleMaint()">
+                <div class="dot"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="card" style="margin-top:0">
+    <h3>// Network Links</h3>
+    <a href="TELEGRAM_LINK_HOLDER" target="_blank" class="tg-btn">[ CONNECT TO TELEGRAM ]</a>
+</div>
+<script>
+function loadStats(){fetch('/admin/api/stats').then(r=>r.json()).then(d=>{document.getElementById('deviceCount').innerText=d.devices;});}
+function toggleMaint(){const sw=document.getElementById('maintToggle');fetch('/admin/api/toggle_maintenance',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success)sw.classList.toggle('on');});}
+function resetCounter(){if(confirm('Reset device counter to 0?')){fetch('/admin/api/reset_ips',{method:'POST'}).then(r=>r.json()).then(d=>{if(d.success)loadStats();});}}
+loadStats();setInterval(loadStats, 5000);
+</script>
+</body></html>
