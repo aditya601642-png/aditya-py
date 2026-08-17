@@ -16,7 +16,7 @@ app.secret_key = 'super_secret_key_cr'
 app_data = {"maintenance": False, "connected_ips": set()}
 
 TARGET_BASE_URL = "https://dl.bs.freefiremobile.com/live/ABHotUpdates/"
-VER_PHP_URL = "https://interface1.ff.garena.com/live/ver.php" 
+VER_PHP_URL = "https://version.ggwhitehawk.com/live/ver.php" 
 ADMIN_PASS = "Aditya@7457$aditya*7457"
 TELEGRAM_LINK = "https://t.me/+aOpyPp0gZyg1YmU1"
 
